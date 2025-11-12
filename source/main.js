@@ -1,7 +1,8 @@
 import packageJson from "../package.json" with { type: "json" };
 import { Command } from "commander";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 
 const program = new Command();
 
@@ -20,9 +21,10 @@ program
 program
   .command("mirror")
   .description("Create a mirror of a repository")
+  .option("--init-destination", "Initialize the destination repository if it does not exist")
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
-  .action((source, destination) => {
+  .action((source, destination, options) => {
     const opid = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
     console.log(`Mirroring ${source} to ${destination}...`);
@@ -33,13 +35,32 @@ program
       { stdio: "inherit" }
     );
 
-    gitCloneProcess.on("close", (code) => {
+    gitCloneProcess.on("close", async (code) => {
       if (code === 0) {
         console.log("Mirror cloned successfully.");
 
+        // handle --init-destination option
+        if (options.initDestination) {
+          const gitInitProcess = spawnSync(
+            "git",
+            ["init", "--bare", destination],
+            { stdio: "inherit" }
+          );
+
+          if (gitInitProcess.status === 0) {
+            console.log("Destination repository initialized successfully.");
+          } else {
+            console.error(`Git init process exited with code ${gitInitProcess.status}`);
+            return;
+          }
+        }
+
+        // Resolve the destination path to an absolute path for git push
+        const absoluteDestination = resolve(destination);
+
         const gitPushProcess = spawn(
           "git",
-          ["push", "--mirror", destination],
+          ["push", "--mirror", absoluteDestination],
           { cwd: `./temp/${opid}`, stdio: "inherit" }
         );
 
