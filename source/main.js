@@ -18,6 +18,7 @@ program
     "--apply-patch <base64Patch>",
     "Apply git patch to repo before pushing to mirror (encode in Base64)",
   )
+  .option("--force", "Force overwrite of destination repository if it exists")
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination, options) => {
@@ -67,7 +68,12 @@ program
 
       const gitPushProcess = spawnSync(
         "git",
-        ["push", "--mirror", destination],
+        [
+          "push",
+          "--mirror",
+          destination,
+          options.force ? "--force" : "",
+        ].filter(Boolean),
         {
           cwd: `./temp/${opid}`,
           stdio: "inherit",
