@@ -30,18 +30,20 @@ program
       if (gitCloneProcess.status !== 0) throw new Error("Git clone failed");
 
       // if the destination is a relative path, resolve it
-      if (destination.startsWith("./")) destination = resolve(destination);
+      if (destination.startsWith("./")) {
+        destination = resolve(destination);
 
-      // does the destination need to be initialized?
-      if (existsSync(destination) === false) {
-        const gitInitProcess = spawnSync(
-          "git",
-          ["init", "--bare", destination],
-          { stdio: "inherit" },
-        );
+        // does the destination need to be initialized?
+        if (existsSync(destination) === false) {
+          const gitInitProcess = spawnSync(
+            "git",
+            ["init", "--bare", destination],
+            { stdio: "inherit" },
+          );
 
-        if (gitInitProcess.status !== 0)
-          throw new Error("Git init of destination failed");
+          if (gitInitProcess.status !== 0)
+            throw new Error("Git init of destination failed");
+        }
       }
 
       const gitPushProcess = spawnSync(
