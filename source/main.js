@@ -1,6 +1,7 @@
 import packageJson from "../package.json" with { type: "json" };
-import { Command } from 'commander';
-import { spawn } from "child_process";
+import { Command } from "commander";
+import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 
 const program = new Command();
 
@@ -24,11 +25,31 @@ program
   .action((source, destination) => {
     console.log(`Mirroring ${source} to ${destination}`);
 
-    const gitProcess = spawn("git", ["clone", "--mirror", source, destination], { stdio: "inherit" });
+    const gitCloneProcess = spawn(
+      "git",
+      ["clone", "--mirror", source, `./temp/${source}`],
+      { stdio: "inherit" }
+    );
 
-    gitProcess.on("close", (code) => {
+    gitCloneProcess.on("close", (code) => {
       if (code === 0) {
-        console.log("Mirror created successfully.");
+        console.log("Mirror cloned successfully.");
+
+        const gitPushProcess = spawn(
+          "git",
+          ["push", "--mirror", destination],
+          { cwd: `./temp/${source}`, stdio: "inherit" }
+        );
+
+        gitPushProcess.on("close", (pushCode) => {
+          if (pushCode === 0) {
+            console.log("Mirror pushed successfully.");
+            rmSync(`./temp/${source}`, { recursive: true, force: true });
+            console.log("Temporary files cleaned up.");
+          } else {
+            console.error(`Git push process exited with code ${pushCode}`);
+          }
+        });
       } else {
         console.error(`Git process exited with code ${code}`);
       }
