@@ -1,7 +1,7 @@
 import packageJson from "../package.json" with { type: "json" };
 import { Command } from "commander";
-import { spawn, spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 const program = new Command();
@@ -14,74 +14,52 @@ program
 program
   .command("mirror")
   .description("Create a mirror of a repository")
-  .option(
-    "--init-destination",
-    "Initialize the destination repository if it does not exist (can also be set via REFLEKT_INIT_DESTINATION environment variable)",
-  )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination, options) => {
-    const opid = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    try {
+      // Generate a unique operation ID for temporary directory
+      const opid = Math.random().toString(36).substring(2, 8);
 
-    console.log(`Mirroring ${source} to ${destination}...`);
+      const gitCloneProcess = spawnSync(
+        "git",
+        ["clone", "--mirror", source, `./temp/${opid}`],
+        { stdio: "inherit" },
+      );
 
-    const gitCloneProcess = spawn(
-      "git",
-      ["clone", "--mirror", source, `./temp/${opid}`],
-      { stdio: "inherit" },
-    );
+      if (gitCloneProcess.status !== 0) throw new Error("Git clone failed");
 
-    gitCloneProcess.on("close", async (code) => {
-      if (code === 0) {
-        console.log("Mirror cloned successfully.");
+      // if the destination is a relative path, resolve it
+      if (destination.startsWith("./")) destination = resolve(destination);
 
-        // handle --init-destination option (check command line flag first, then environment variable)
-        const shouldInitDestination =
-          options.initDestination ||
-          (process.env.REFLEKT_INIT_DESTINATION &&
-            process.env.REFLEKT_INIT_DESTINATION.toLowerCase() === "true");
+      // does the destination need to be initialized?
+      if (existsSync(destination) === false) {
+        const gitInitProcess = spawnSync(
+          "git",
+          ["init", "--bare", destination],
+          { stdio: "inherit" },
+        );
 
-        if (shouldInitDestination) {
-          const gitInitProcess = spawnSync(
-            "git",
-            ["init", "--bare", destination],
-            { stdio: "inherit" },
-          );
+        if (gitInitProcess.status !== 0)
+          throw new Error("Git init of destination failed");
+      }
 
-          if (gitInitProcess.status === 0) {
-            console.log("Destination repository initialized successfully.");
-          } else {
-            console.error(
-              `Git init process exited with code ${gitInitProcess.status}`,
-            );
-            return;
-          }
-        }
-
-        // if the destination is a relative path
-        if (destination.startsWith("./")) {
-          // Resolve the destination path to an absolute path for git push
-          destination = resolve(destination);
-        }
-
-        const gitPushProcess = spawn("git", ["push", "--mirror", destination], {
+      const gitPushProcess = spawnSync(
+        "git",
+        ["push", "--mirror", destination],
+        {
           cwd: `./temp/${opid}`,
           stdio: "inherit",
-        });
+        },
+      );
 
-        gitPushProcess.on("close", (pushCode) => {
-          if (pushCode === 0) {
-            console.log("Mirror pushed successfully.");
-            rmSync(`./temp/${opid}`, { recursive: true, force: true });
-            console.log("Temporary files cleaned up.");
-          } else {
-            console.error(`Git push process exited with code ${pushCode}`);
-          }
-        });
-      } else {
-        console.error(`Git process exited with code ${code}`);
-      }
-    });
+      if (gitPushProcess.status !== 0) throw new Error("Git push failed");
+
+      // Clean up the temporary directory
+      rmSync(`./temp/${opid}`, { recursive: true, force: true });
+    } catch (error) {
+      console.error("An error occurred during the mirroring process:", error);
+    }
   });
 
 program.parse();
