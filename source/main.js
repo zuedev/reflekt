@@ -55,12 +55,15 @@ program
           }
         }
 
-        // Resolve the destination path to an absolute path for git push
-        const absoluteDestination = resolve(destination);
+        // if the destination is a relative path
+        if (!destination.startsWith("http://") && !destination.startsWith("https://") && !destination.startsWith("git@") && !destination.startsWith("/")) {
+            // Resolve the destination path to an absolute path for git push
+          destination = resolve(destination);
+        }
 
         const gitPushProcess = spawn(
           "git",
-          ["push", "--mirror", absoluteDestination],
+          ["push", "--mirror", destination],
           { cwd: `./temp/${opid}`, stdio: "inherit" }
         );
 
