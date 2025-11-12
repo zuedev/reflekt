@@ -16,7 +16,7 @@ program
   .description("Create a mirror of a repository")
   .option(
     "--init-destination",
-    "Initialize the destination repository if it does not exist"
+    "Initialize the destination repository if it does not exist",
   )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
@@ -28,7 +28,7 @@ program
     const gitCloneProcess = spawn(
       "git",
       ["clone", "--mirror", source, `./temp/${opid}`],
-      { stdio: "inherit" }
+      { stdio: "inherit" },
     );
 
     gitCloneProcess.on("close", async (code) => {
@@ -40,14 +40,14 @@ program
           const gitInitProcess = spawnSync(
             "git",
             ["init", "--bare", destination],
-            { stdio: "inherit" }
+            { stdio: "inherit" },
           );
 
           if (gitInitProcess.status === 0) {
             console.log("Destination repository initialized successfully.");
           } else {
             console.error(
-              `Git init process exited with code ${gitInitProcess.status}`
+              `Git init process exited with code ${gitInitProcess.status}`,
             );
             return;
           }
