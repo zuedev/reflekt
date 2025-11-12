@@ -56,7 +56,7 @@ program
         }
 
         // if the destination is a relative path
-        if (!destination.startsWith("http://") && !destination.startsWith("https://") && !destination.startsWith("git@") && !destination.startsWith("/")) {
+        if (destination.startsWith("./")) {
             // Resolve the destination path to an absolute path for git push
           destination = resolve(destination);
         }
