@@ -23,11 +23,13 @@ program
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination) => {
-    console.log(`Mirroring ${source} to ${destination}`);
+    const opid = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+    console.log(`Mirroring ${source} to ${destination}...`);
 
     const gitCloneProcess = spawn(
       "git",
-      ["clone", "--mirror", source, `./temp/${source}`],
+      ["clone", "--mirror", source, `./temp/${opid}`],
       { stdio: "inherit" }
     );
 
@@ -38,13 +40,13 @@ program
         const gitPushProcess = spawn(
           "git",
           ["push", "--mirror", destination],
-          { cwd: `./temp/${source}`, stdio: "inherit" }
+          { cwd: `./temp/${opid}`, stdio: "inherit" }
         );
 
         gitPushProcess.on("close", (pushCode) => {
           if (pushCode === 0) {
             console.log("Mirror pushed successfully.");
-            rmSync(`./temp/${source}`, { recursive: true, force: true });
+            rmSync(`./temp/${opid}`, { recursive: true, force: true });
             console.log("Temporary files cleaned up.");
           } else {
             console.error(`Git push process exited with code ${pushCode}`);

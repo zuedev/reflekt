@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 
 test("does ping command output pong?", (done) => {
   const cliProcess = spawn("node", ["source/main.js", "ping"]);
@@ -17,7 +18,7 @@ test("does ping command output pong?", (done) => {
 
 test("does the mirror command work?", (done) => {
   const sourceRepo = "https://forgejo.sovereign.zue.dev/zuedev/reflekt.git";
-  const destRepo = "git@github.com:zuedev/reflekt-test-mirror.git";
+  const destRepo = `./mainjs-reflekt-test-mirror-${Date.now()}.git`;
 
   const cliProcess = spawn("node", [
     "source/main.js",
@@ -28,6 +29,10 @@ test("does the mirror command work?", (done) => {
 
   cliProcess.on("close", (code) => {
     expect(code).toBe(0);
+
+    // Clean up the created mirror repository
+    rmSync(destRepo, { recursive: true, force: true });
+
     done();
   });
 });
