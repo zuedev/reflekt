@@ -14,6 +14,10 @@ program
 program
   .command("mirror")
   .description("Create a mirror of a repository")
+  .option(
+    "--apply-patch",
+    "Apply git patch to repo before pushing to mirror (encode in Base64)",
+  )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination, options) => {
@@ -44,6 +48,21 @@ program
           if (gitInitProcess.status !== 0)
             throw new Error("Git init of destination failed");
         }
+      }
+
+      // apply patch if requested
+      if (options.applyPatch) {
+        // Decode the Base64 patch
+        const patchBuffer = Buffer.from(options.applyPatch, "base64");
+
+        const gitApplyProcess = spawnSync("git", ["apply", "-"], {
+          cwd: `./temp/${opid}`,
+          input: patchBuffer,
+          stdio: "inherit",
+        });
+
+        if (gitApplyProcess.status !== 0)
+          throw new Error("Git apply patch failed");
       }
 
       const gitPushProcess = spawnSync(
