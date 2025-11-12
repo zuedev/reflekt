@@ -1,4 +1,7 @@
 {
+  "name": "reflekt",
+  "description": "Git mirror manager with transformation hooks",
+  "version": "0.0.1",
   "scripts": {
     "start": "node source/main.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
@@ -6,5 +9,8 @@
   "devDependencies": {
     "jest": "^29.7.0"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "commander": "^14.0.2"
+  }
 }
