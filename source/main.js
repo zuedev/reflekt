@@ -12,13 +12,6 @@ program
   .version(packageJson.version);
 
 program
-  .command("ping")
-  .description("Check if the tool is working")
-  .action(() => {
-    console.log("Pong!");
-  });
-
-program
   .command("mirror")
   .description("Create a mirror of a repository")
   .option(
