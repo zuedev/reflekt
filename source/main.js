@@ -16,7 +16,7 @@ program
   .description("Create a mirror of a repository")
   .option(
     "--init-destination",
-    "Initialize the destination repository if it does not exist",
+    "Initialize the destination repository if it does not exist (can also be set via REFLEKT_INIT_DESTINATION environment variable)",
   )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
@@ -35,8 +35,13 @@ program
       if (code === 0) {
         console.log("Mirror cloned successfully.");
 
-        // handle --init-destination option
-        if (options.initDestination) {
+        // handle --init-destination option (check command line flag first, then environment variable)
+        const shouldInitDestination =
+          options.initDestination ||
+          (process.env.REFLEKT_INIT_DESTINATION &&
+            process.env.REFLEKT_INIT_DESTINATION.toLowerCase() === "true");
+
+        if (shouldInitDestination) {
           const gitInitProcess = spawnSync(
             "git",
             ["init", "--bare", destination],
