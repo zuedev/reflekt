@@ -15,7 +15,7 @@ program
   .command("mirror")
   .description("Create a mirror of a repository")
   .option(
-    "--apply-patch",
+    "--apply-patch <base64Patch>",
     "Apply git patch to repo before pushing to mirror (encode in Base64)",
   )
   .argument("<source>", "The source repository")
