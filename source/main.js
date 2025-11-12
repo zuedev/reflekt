@@ -21,7 +21,10 @@ program
 program
   .command("mirror")
   .description("Create a mirror of a repository")
-  .option("--init-destination", "Initialize the destination repository if it does not exist")
+  .option(
+    "--init-destination",
+    "Initialize the destination repository if it does not exist"
+  )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination, options) => {
@@ -50,22 +53,23 @@ program
           if (gitInitProcess.status === 0) {
             console.log("Destination repository initialized successfully.");
           } else {
-            console.error(`Git init process exited with code ${gitInitProcess.status}`);
+            console.error(
+              `Git init process exited with code ${gitInitProcess.status}`
+            );
             return;
           }
         }
 
         // if the destination is a relative path
         if (destination.startsWith("./")) {
-            // Resolve the destination path to an absolute path for git push
+          // Resolve the destination path to an absolute path for git push
           destination = resolve(destination);
         }
 
-        const gitPushProcess = spawn(
-          "git",
-          ["push", "--mirror", destination],
-          { cwd: `./temp/${opid}`, stdio: "inherit" }
-        );
+        const gitPushProcess = spawn("git", ["push", "--mirror", destination], {
+          cwd: `./temp/${opid}`,
+          stdio: "inherit",
+        });
 
         gitPushProcess.on("close", (pushCode) => {
           if (pushCode === 0) {
