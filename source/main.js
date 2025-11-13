@@ -15,6 +15,10 @@ program
   .command("mirror")
   .description("Create a mirror of a repository")
   .option("--force", "Force overwrite of destination repository if it exists")
+  .option(
+    "--apply-patch <patch>",
+    "Apply a patch to the mirrored repository before pushing (encoded as base64)",
+  )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination, options) => {
@@ -25,7 +29,7 @@ program
       const gitCloneProcess = spawnSync(
         "git",
         ["clone", source, `./temp/${opid}`],
-        { stdio: "inherit" },
+        { stdio: ["pipe", "pipe", "pipe"] },
       );
 
       if (gitCloneProcess.status !== 0) throw new Error("Git clone failed");
@@ -38,8 +42,10 @@ program
         if (existsSync(destination) === false) {
           const gitInitProcess = spawnSync(
             "git",
-            ["init", destination],
-            { stdio: "inherit" },
+            ["init", "--bare", destination],
+            {
+              stdio: ["pipe", "pipe", "pipe"],
+            },
           );
 
           if (gitInitProcess.status !== 0)
@@ -47,16 +53,28 @@ program
         }
       }
 
+      // do we need to apply a patch?
+      if (options.applyPatch) {
+        const patch = Buffer.from(options.applyPatch, "base64").toString(
+          "utf-8",
+        );
+
+        const gitApplyProcess = spawnSync("git", ["apply", "-"], {
+          input: patch,
+          cwd: `./temp/${opid}`,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+
+        if (gitApplyProcess.status !== 0)
+          throw new Error("Git apply patch failed");
+      }
+
       const gitPushProcess = spawnSync(
         "git",
-        [
-          "push",
-          destination,
-          options.force ? "--force" : "",
-        ].filter(Boolean),
+        ["push", destination, "main", ...(options.force ? ["--force"] : [])],
         {
           cwd: `./temp/${opid}`,
-          stdio: "inherit",
+          stdio: ["pipe", "pipe", "pipe"],
         },
       );
 
@@ -66,6 +84,7 @@ program
       rmSync(`./temp/${opid}`, { recursive: true, force: true });
     } catch (error) {
       console.error("An error occurred during the mirroring process:", error);
+      process.exit(1);
     }
   });
 
