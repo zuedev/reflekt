@@ -42,6 +42,40 @@ program
 
       if (gitCloneProcess.status !== 0) throw new Error("Git clone failed");
 
+      // Fetch all remote branches and track them locally
+      const gitFetchAllProcess = spawnSync("git", ["fetch", "--all"], {
+        cwd: `./temp/${opid}`,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      if (gitFetchAllProcess.status !== 0)
+        throw new Error("Git fetch all failed");
+
+      // Create local tracking branches for all remote branches
+      const gitListRemoteBranchesProcess = spawnSync("git", ["branch", "-r"], {
+        cwd: `./temp/${opid}`,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      if (gitListRemoteBranchesProcess.status === 0) {
+        const remoteBranches = gitListRemoteBranchesProcess.stdout
+          .toString()
+          .split("\n")
+          .map((branch) => branch.trim())
+          .filter((branch) => branch && !branch.includes("HEAD ->"))
+          .map((branch) => branch.replace("origin/", ""));
+
+        // Create local branches for each remote branch (except the current one)
+        for (const branch of remoteBranches) {
+          if (branch !== "main" && branch !== "master") {
+            spawnSync("git", ["checkout", "-b", branch, `origin/${branch}`], {
+              cwd: `./temp/${opid}`,
+              stdio: ["pipe", "pipe", "pipe"],
+            });
+          }
+        }
+      }
+
       // if the destination is a relative path, resolve it
       if (destination.startsWith("./")) {
         destination = resolve(destination);
@@ -165,7 +199,7 @@ program
 
       const gitPushProcess = spawnSync(
         "git",
-        ["push", destination, "main", ...(options.force ? ["--force"] : [])],
+        ["push", destination, "--all", ...(options.force ? ["--force"] : [])],
         {
           cwd: `./temp/${opid}`,
           stdio: ["pipe", "pipe", "pipe"],
@@ -173,6 +207,19 @@ program
       );
 
       if (gitPushProcess.status !== 0) throw new Error("Git push failed");
+
+      // Also push all tags
+      const gitPushTagsProcess = spawnSync(
+        "git",
+        ["push", destination, "--tags", ...(options.force ? ["--force"] : [])],
+        {
+          cwd: `./temp/${opid}`,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
+
+      if (gitPushTagsProcess.status !== 0)
+        throw new Error("Git push tags failed");
 
       // Clean up the temporary directory
       rmSync(`./temp/${opid}`, { recursive: true, force: true });
