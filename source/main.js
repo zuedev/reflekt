@@ -24,7 +24,7 @@ program
 
       const gitCloneProcess = spawnSync(
         "git",
-        ["clone", "--mirror", source, `./temp/${opid}`],
+        ["clone", source, `./temp/${opid}`],
         { stdio: "inherit" },
       );
 
@@ -38,7 +38,7 @@ program
         if (existsSync(destination) === false) {
           const gitInitProcess = spawnSync(
             "git",
-            ["init", "--bare", destination],
+            ["init", destination],
             { stdio: "inherit" },
           );
 
@@ -51,7 +51,6 @@ program
         "git",
         [
           "push",
-          "--mirror",
           destination,
           options.force ? "--force" : "",
         ].filter(Boolean),
