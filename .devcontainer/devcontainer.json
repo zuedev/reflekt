@@ -1,0 +1,9 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "mounts": [
+    // Bind mount the SSH keys from the host to the container
+    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+  ]
+}
