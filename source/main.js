@@ -121,10 +121,32 @@ program
           const owner = githubUrlMatch[1];
           const repo = githubUrlMatch[2];
 
-          console.log("owner", owner);
-          console.log("repo", repo);
+          // does the repository already exist on GitHub?
+          const checkRepoProcess = spawnSync("curl", [
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            `Authorization: Bearer ${options.githubToken}`,
+            `https://api.github.com/repos/${owner}/${repo}`,
+          ]);
 
-          // First, check if the owner is a user or an organization
+          if (checkRepoProcess.status === 0) {
+            const responseBody = checkRepoProcess.stdout.toString();
+            try {
+              const response = JSON.parse(responseBody);
+              if (!response.message) {
+                // Repository exists, no need to create
+                console.log(
+                  `Repository ${owner}/${repo} already exists on GitHub.`,
+                );
+                // proceed to push
+              }
+            } catch (e) {
+              // If response isn't JSON, proceed to create the repo
+            }
+          }
+
+          // check if the owner is a user or an organization
           const checkOwnerProcess = spawnSync("curl", [
             "-H",
             "Accept: application/vnd.github+json",
@@ -164,7 +186,6 @@ program
           ]);
 
           const responseBody = createRepoProcess.stdout.toString();
-          console.log("createRepoProcess", responseBody);
 
           // Check if the response indicates an error
           if (createRepoProcess.status !== 0) {
