@@ -4,7 +4,10 @@
   "version": "0.0.1",
   "scripts": {
     "start": "node source/main.js",
-    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' jest"
+    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' jest",
+    "docker:build": "docker build -t reflekt .",
+    "docker:run": "docker run --rm reflekt",
+    "docker:compose": "docker-compose run --rm reflekt"
   },
   "devDependencies": {
     "jest": "^29.7.0",

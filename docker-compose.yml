@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  reflekt:
+    build: .
+    volumes:
+      # Mount the current directory to access local repositories
+      - .:/workspace
+      # Mount docker socket if you need to access other containers (optional)
+      # - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Set any required environment variables
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    working_dir: /workspace
+    # Override the default entrypoint for interactive use
+    # command: ["sh"]
+    # stdin_open: true
+    # tty: true
+# Example usage:
+# docker-compose run --rm reflekt mirror https://github.com/source/repo.git https://github.com/dest/repo.git
+# docker-compose run --rm reflekt mirror --force --github-create-repo --github-token "$GITHUB_TOKEN" https://github.com/source/repo.git https://github.com/dest/repo.git
