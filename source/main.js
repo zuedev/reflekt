@@ -19,6 +19,14 @@ program
     "--apply-patch <patch>",
     "Apply a patch to the mirrored repository before pushing (encoded as base64)",
   )
+  .option(
+    "--github-create-repo",
+    "Create the destination repository on GitHub if it does not exist (use --github-token for authentication)",
+  )
+  .option(
+    "--github-token <token>",
+    "GitHub token for authentication when creating a repository",
+  )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
   .action((source, destination, options) => {
@@ -67,6 +75,92 @@ program
 
         if (gitApplyProcess.status !== 0)
           throw new Error("Git apply patch failed");
+      }
+
+      // do we need to create the destination repository on GitHub?
+      if (options.githubCreateRepo) {
+        const githubUrlMatch = destination.match(
+          /github\.com[:/](.+?)\/(.+?)(\.git)?$/,
+        );
+
+        if (githubUrlMatch) {
+          const owner = githubUrlMatch[1];
+          const repo = githubUrlMatch[2];
+
+          console.log("owner", owner);
+          console.log("repo", repo);
+
+          // First, check if the owner is a user or an organization
+          const checkOwnerProcess = spawnSync("curl", [
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            `Authorization: Bearer ${options.githubToken}`,
+            `https://api.github.com/users/${owner}`,
+          ]);
+
+          if (checkOwnerProcess.status !== 0) {
+            throw new Error(
+              `Failed to check if ${owner} is a valid GitHub user/organization`,
+            );
+          }
+
+          const ownerData = JSON.parse(checkOwnerProcess.stdout.toString());
+          const isOrganization = ownerData.type === "Organization";
+
+          // Use the appropriate endpoint based on whether it's a user or organization
+          const apiEndpoint = isOrganization
+            ? `https://api.github.com/orgs/${owner}/repos`
+            : `https://api.github.com/user/repos`;
+
+          const requestBody = isOrganization
+            ? { name: repo, private: true }
+            : { name: repo, private: true, owner: owner };
+
+          const createRepoProcess = spawnSync("curl", [
+            "-X",
+            "POST",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            `Authorization: Bearer ${options.githubToken}`,
+            "-d",
+            JSON.stringify(requestBody),
+            apiEndpoint,
+          ]);
+
+          const responseBody = createRepoProcess.stdout.toString();
+          console.log("createRepoProcess", responseBody);
+
+          // Check if the response indicates an error
+          if (createRepoProcess.status !== 0) {
+            let errorMessage = "GitHub repository creation failed";
+            try {
+              const errorResponse = JSON.parse(responseBody);
+              if (errorResponse.message) {
+                errorMessage += `: ${errorResponse.message}`;
+              }
+            } catch (e) {
+              // If response isn't JSON, use the raw response
+              errorMessage += `: ${responseBody}`;
+            }
+            throw new Error(errorMessage);
+          }
+
+          // Also check if the response body contains an error (curl succeeded but API returned error)
+          try {
+            const response = JSON.parse(responseBody);
+            if (response.message && response.status) {
+              throw new Error(`GitHub API error: ${response.message}`);
+            }
+          } catch (e) {
+            // If it's not JSON or doesn't have error fields, assume success
+          }
+        } else {
+          throw new Error(
+            "Destination URL is not a valid GitHub repository URL",
+          );
+        }
       }
 
       const gitPushProcess = spawnSync(
