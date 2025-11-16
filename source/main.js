@@ -1,8 +1,8 @@
 import packageJson from "../package.json" with { type: "json" };
 import { Command } from "commander";
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 
 const program = new Command();
 
@@ -40,7 +40,7 @@ program
   )
   .argument("<source>", "The source repository")
   .argument("<destination>", "The destination repository")
-  .action((source, destination, options) => {
+  .action(async (source, destination, options) => {
     try {
       // Generate a unique operation ID for temporary directory
       const opid = Math.random().toString(36).substring(2, 8);
@@ -135,24 +135,13 @@ program
           const fileContent = fileEntry.substring(separatorIndex + 1);
 
           const fullFilePath = resolve(`./temp/${opid}`, filePath);
-          const dirPath = resolve(fullFilePath, "..");
+          const dirPath = dirname(fullFilePath);
 
           // Ensure the directory exists
-          spawnSync("mkdir", ["-p", dirPath], {
-            stdio: ["pipe", "pipe", "pipe"],
-          });
+          mkdirSync(dirPath, { recursive: true });
 
-          // Append the content to the file
-          const echoProcess = spawnSync(
-            "bash",
-            ["-c", `echo "${fileContent}" >> "${fullFilePath}"`],
-            {
-              stdio: ["pipe", "pipe", "pipe"],
-            },
-          );
-
-          if (echoProcess.status !== 0)
-            throw new Error(`Failed to append content to file: ${filePath}`);
+          // Write the content to the file
+          writeFileSync(fullFilePath, fileContent + "\n", { flag: "a" });
         }
 
         // Commit the changes
@@ -188,94 +177,89 @@ program
           const repo = githubUrlMatch[2];
 
           // does the repository already exist on GitHub?
-          const checkRepoProcess = spawnSync("curl", [
-            "-H",
-            "Accept: application/vnd.github+json",
-            "-H",
-            `Authorization: Bearer ${options.githubToken}`,
-            `https://api.github.com/repos/${owner}/${repo}`,
-          ]);
-
-          if (checkRepoProcess.status === 0) {
-            const responseBody = checkRepoProcess.stdout.toString();
-            try {
-              const response = JSON.parse(responseBody);
-              if (!response.message) {
-                // Repository exists, no need to create
-                console.log(
-                  `Repository ${owner}/${repo} already exists on GitHub.`,
-                );
-                // proceed to push
-              }
-            } catch (e) {
-              // If response isn't JSON, proceed to create the repo
-            }
-          }
-
-          // check if the owner is a user or an organization
-          const checkOwnerProcess = spawnSync("curl", [
-            "-H",
-            "Accept: application/vnd.github+json",
-            "-H",
-            `Authorization: Bearer ${options.githubToken}`,
-            `https://api.github.com/users/${owner}`,
-          ]);
-
-          if (checkOwnerProcess.status !== 0) {
-            throw new Error(
-              `Failed to check if ${owner} is a valid GitHub user/organization`,
-            );
-          }
-
-          const ownerData = JSON.parse(checkOwnerProcess.stdout.toString());
-          const isOrganization = ownerData.type === "Organization";
-
-          // Use the appropriate endpoint based on whether it's a user or organization
-          const apiEndpoint = isOrganization
-            ? `https://api.github.com/orgs/${owner}/repos`
-            : `https://api.github.com/user/repos`;
-
-          const requestBody = isOrganization
-            ? { name: repo, private: true }
-            : { name: repo, private: true, owner: owner };
-
-          const createRepoProcess = spawnSync("curl", [
-            "-X",
-            "POST",
-            "-H",
-            "Accept: application/vnd.github+json",
-            "-H",
-            `Authorization: Bearer ${options.githubToken}`,
-            "-d",
-            JSON.stringify(requestBody),
-            apiEndpoint,
-          ]);
-
-          const responseBody = createRepoProcess.stdout.toString();
-
-          // Check if the response indicates an error
-          if (createRepoProcess.status !== 0) {
-            let errorMessage = "GitHub repository creation failed";
-            try {
-              const errorResponse = JSON.parse(responseBody);
-              if (errorResponse.message) {
-                errorMessage += `: ${errorResponse.message}`;
-              }
-            } catch (e) {
-              // If response isn't JSON, use the raw response
-              errorMessage += `: ${responseBody}`;
-            }
-            throw new Error(errorMessage);
-          }
-
-          // Also check if the response body contains an error (curl succeeded but API returned error)
+          let repositoryExists = false;
           try {
-            const response = JSON.parse(responseBody);
-            if (response.message && response.status) {
-              throw new Error(`GitHub API error: ${response.message}`);
+            const response = await fetch(
+              `https://api.github.com/repos/${owner}/${repo}`,
+              {
+                headers: {
+                  Accept: "application/vnd.github+json",
+                  Authorization: `Bearer ${options.githubToken}`,
+                },
+              },
+            );
+
+            if (response.ok) {
+              repositoryExists = true;
+              console.log(
+                `Repository ${owner}/${repo} already exists on GitHub.`,
+              );
+            } else if (response.status !== 404) {
+              throw new Error(
+                `Failed to check repository existence: ${response.statusText}`,
+              );
             }
-          } catch (e) {
-            // If it's not JSON or doesn't have error fields, assume success
+            // If 404, repository doesn't exist, we'll create it
+          } catch (error) {
+            if (error.code === "ENOTFOUND" || error.message.includes("fetch")) {
+              throw new Error("Failed to connect to GitHub API");
+            }
+            throw error;
+          }
+
+          // Only create the repository if it doesn't already exist
+          if (!repositoryExists) {
+            // check if the owner is a user or an organization
+            const ownerResponse = await fetch(
+              `https://api.github.com/users/${owner}`,
+              {
+                headers: {
+                  Accept: "application/vnd.github+json",
+                  Authorization: `Bearer ${options.githubToken}`,
+                },
+              },
+            );
+
+            if (!ownerResponse.ok) {
+              throw new Error(
+                `Failed to check if ${owner} is a valid GitHub user/organization: ${ownerResponse.statusText}`,
+              );
+            }
+
+            const ownerData = await ownerResponse.json();
+            const isOrganization = ownerData.type === "Organization";
+
+            // Use the appropriate endpoint based on whether it's a user or organization
+            const apiEndpoint = isOrganization
+              ? `https://api.github.com/orgs/${owner}/repos`
+              : `https://api.github.com/user/repos`;
+
+            const requestBody = isOrganization
+              ? { name: repo, private: true }
+              : { name: repo, private: true, owner: owner };
+
+            const createRepoResponse = await fetch(apiEndpoint, {
+              method: "POST",
+              headers: {
+                Accept: "application/vnd.github+json",
+                Authorization: `Bearer ${options.githubToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestBody),
+            });
+
+            if (!createRepoResponse.ok) {
+              let errorMessage = "GitHub repository creation failed";
+              try {
+                const errorResponse = await createRepoResponse.json();
+                if (errorResponse.message) {
+                  errorMessage += `: ${errorResponse.message}`;
+                }
+              } catch (e) {
+                errorMessage += `: ${createRepoResponse.statusText}`;
+              }
+              throw new Error(errorMessage);
+            }
           }
         } else {
           throw new Error(
