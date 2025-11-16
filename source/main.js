@@ -20,6 +20,17 @@ program
     "Apply a patch to the mirrored repository before pushing (encoded as base64)",
   )
   .option(
+    "--append-file <file=content>",
+    "Append a file with specified content to the mirrored repository before pushing (can be used multiple times)",
+    (value, previous) => {
+      if (previous === undefined) {
+        return [value];
+      } else {
+        return previous.concat([value]);
+      }
+    },
+  )
+  .option(
     "--github-create-repo",
     "Create the destination repository on GitHub if it does not exist (use --github-token for authentication)",
   )
@@ -109,6 +120,61 @@ program
 
         if (gitApplyProcess.status !== 0)
           throw new Error("Git apply patch failed");
+      }
+
+      // do we need to append any files?
+      if (options.appendFile) {
+        for (const fileEntry of options.appendFile) {
+          const separatorIndex = fileEntry.indexOf("=");
+          if (separatorIndex === -1) {
+            throw new Error(
+              `Invalid format for --append-file option: ${fileEntry}. Expected format is <file=content>`,
+            );
+          }
+          const filePath = fileEntry.substring(0, separatorIndex);
+          const fileContent = fileEntry.substring(separatorIndex + 1);
+
+          const fullFilePath = resolve(`./temp/${opid}`, filePath);
+          const dirPath = resolve(fullFilePath, "..");
+
+          // Ensure the directory exists
+          spawnSync("mkdir", ["-p", dirPath], {
+            stdio: ["pipe", "pipe", "pipe"],
+          });
+
+          // Append the content to the file
+          const echoProcess = spawnSync(
+            "bash",
+            ["-c", `echo "${fileContent}" >> "${fullFilePath}"`],
+            {
+              stdio: ["pipe", "pipe", "pipe"],
+            },
+          );
+
+          if (echoProcess.status !== 0)
+            throw new Error(`Failed to append content to file: ${filePath}`);
+        }
+
+        // Commit the changes
+        const gitAddProcess = spawnSync("git", ["add", "."], {
+          cwd: `./temp/${opid}`,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+
+        if (gitAddProcess.status !== 0)
+          throw new Error("Git add for appended files failed");
+
+        const gitCommitProcess = spawnSync(
+          "git",
+          ["commit", "-m", `reflekt --append-file`],
+          {
+            cwd: `./temp/${opid}`,
+            stdio: ["pipe", "pipe", "pipe"],
+          },
+        );
+
+        if (gitCommitProcess.status !== 0)
+          throw new Error("Git commit for appended files failed");
       }
 
       // do we need to create the destination repository on GitHub?

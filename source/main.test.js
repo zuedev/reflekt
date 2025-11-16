@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { rmSync } from "node:fs";
+import { rmSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 test("does the mirror command work?", (done) => {
   const sourceRepo = "https://forgejo.sovereign.zue.dev/zuedev/reflekt.git";
@@ -88,3 +89,43 @@ index 0000000..e69de29
     done();
   });
 });
+
+test("does the append-file option work?", (done) => {
+  const sourceRepo = "https://forgejo.sovereign.zue.dev/zuedev/reflekt.git";
+  const destRepo = `./temp/${Date.now()}-mainjs-does-the-append-file-option-work.git`;
+
+  const filePath = "APPENDED_FILE.txt";
+  const fileContent = "This is some appended content.";
+
+  const cliProcess = spawn("node", [
+    "source/main.js",
+    "mirror",
+    "--append-file",
+    `${filePath}=${fileContent}`,
+    sourceRepo,
+    destRepo,
+  ]);
+
+  cliProcess.on("close", (code) => {
+    expect(code).toBe(0);
+
+    // Clone the bare repository to access the files
+    const cloneDestRepo = `${destRepo}-clone`;
+    const cloneResult = spawnSync("git", ["clone", destRepo, cloneDestRepo], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    expect(cloneResult.status).toBe(0);
+
+    // Verify that the file was appended correctly
+    const appendedFilePath = `${cloneDestRepo}/${filePath}`;
+    const appendedContent = readFileSync(appendedFilePath, "utf-8");
+    expect(appendedContent).toBe(fileContent + "\n"); // echo adds a newline
+
+    // Clean up both repositories
+    rmSync(destRepo, { recursive: true, force: true });
+    rmSync(cloneDestRepo, { recursive: true, force: true });
+
+    done();
+  });
+}, 10000); // 10 second timeout
